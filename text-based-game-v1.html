@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>TEXT BASED GAME</title>
+<meta name="theme-color" content="#f4efe2">
+<style>
+:root{
+  --paper:#f4efe2;
+  --paper2:#ebe4d2;
+  --ink:#26241f;
+  --dim:#7a7466;
+  --blue:#1f5fbf;
+  --blue2:#4d8ef0;
+  --green:#2e7d32;
+  --amber:#b26a00;
+  --red:#c62828;
+  --violet:#6a3fb5;
+  --line:#d6cdb6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--paper);color:var(--ink)}
+body{font-family:"Courier New",ui-monospace,Menlo,Consolas,monospace;font-size:14px;display:flex;flex-direction:column;overflow:hidden}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.035) 0px,rgba(0,0,0,0.035) 1px,transparent 1px,transparent 3px);z-index:50}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:2px solid var(--blue);background:var(--paper)}
+.brand{font-weight:bold;letter-spacing:4px;font-size:18px;color:var(--blue);text-shadow:0 0 6px rgba(31,95,191,0.35)}
+.brand small{display:block;font-size:10px;letter-spacing:2px;color:var(--dim);text-shadow:none;font-weight:normal}
+#menuBtn{background:none;border:2px solid var(--ink);width:40px;height:36px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 8px;cursor:pointer}
+#menuBtn span{display:block;height:2px;background:var(--ink)}
+#res{display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 14px;border-bottom:1px dashed var(--line);font-size:13px;background:var(--paper2)}
+#res b{font-weight:bold}
+.r-scrap b{color:var(--amber)}.r-wire b{color:var(--green)}.r-chip b{color:var(--violet)}.r-core b{color:var(--blue)}.r-cpu b{color:var(--ink)}
+.r-cpu.hot b{color:var(--red)}
+#phase{font-size:11px;letter-spacing:2px;color:var(--dim);padding:4px 14px;border-bottom:1px dashed var(--line)}
+#mapWrap{height:34vh;min-height:150px;overflow-y:auto;border-bottom:2px solid var(--ink);background:var(--paper)}
+#map{display:block;width:100%}
+#log{flex:1;overflow-y:auto;padding:10px 14px 16px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.l{margin-bottom:4px}
+.sys{color:var(--dim)}.you{color:var(--blue);font-weight:bold}.ok{color:var(--green)}.warn{color:var(--amber)}.bad{color:var(--red)}.ai{color:var(--violet)}.big{color:var(--blue);font-weight:bold;text-shadow:0 0 6px rgba(31,95,191,0.3)}
+.cursor{display:inline-block;width:8px;height:14px;background:var(--blue);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+#bar{display:flex;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:2px solid var(--ink);background:var(--paper2)}
+#bar .prompt{align-self:center;color:var(--blue);font-weight:bold}
+#cmd{flex:1;min-width:0;font:inherit;font-size:16px;background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:4px;padding:8px}
+#cmd:focus{outline:none;border-color:var(--blue)}
+.btn{font:inherit;font-weight:bold;border:2px solid var(--ink);background:var(--paper);color:var(--ink);border-radius:4px;padding:0 12px;cursor:pointer}
+#mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:0.6}}
+#send{background:var(--blue);color:#fff;border-color:var(--blue)}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(330px,88vw);background:var(--paper);border-left:2px solid var(--ink);transform:translateX(105%);transition:transform .2s;z-index:60;padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+#drawer.open{transform:none}
+#drawer h3{color:var(--blue);letter-spacing:3px;font-size:15px}
+#drawer label{font-size:12px;color:var(--dim)}
+#drawer input{font:inherit;font-size:15px;width:100%;padding:8px;border:2px solid var(--ink);border-radius:4px;background:var(--paper2);color:var(--ink)}
+#drawer .btn{padding:10px}
+#drawer p{font-size:12px;color:var(--dim);line-height:1.4}
+#engineState{font-size:12px}
+#veil{position:fixed;inset:0;background:rgba(38,36,31,0.25);display:none;z-index:55}
+#veil.open{display:block}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">TEXT BASED GAME<small>make it small. copy it. automate it.</small></div>
+  <button id="menuBtn" aria-label="menu"><span></span><span></span><span></span></button>
+</header>
+<div id="res"></div>
+<div id="phase"></div>
+<div id="mapWrap"><canvas id="map"></canvas></div>
+<div id="log"></div>
+<div id="bar">
+  <span class="prompt">&gt;</span>
+  <input id="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="talk or type">
+  <button class="btn" id="mic" aria-label="voice">MIC</button>
+  <button class="btn" id="send">RUN</button>
+</div>
+<div id="veil"></div>
+<div id="drawer">
+  <h3>MILL SETTINGS</h3>
+  <div id="engineState" class="sys"></div>
+  <p>The AI turns whatever you say into mill commands. If it does not answer, the mill reads your words with its built in parser.</p>
+  <button class="btn" id="helpBtn">SHOW COMMANDS</button>
+  <button class="btn" id="resetBtn" style="border-color:var(--red);color:var(--red)">WIPE THE MILL</button>
+  <p>text based game v1</p>
+</div>
+
+<script>
+(function(){
+"use strict";
+var SAVE_KEY = "text-based-game-v1-save";
+
+function store(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+function load(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function unstore(k){ try{ localStorage.removeItem(k); }catch(e){} }
+
+var ORDER = ["grabber","smelter","etcher","assembler","checker","writer"];
+var TYPES = {
+  grabber:  {color:"#1f5fbf", inp:null,        out:"scrap", make:null,                fork:{scrap:5},          desc:"picks up scrap"},
+  smelter:  {color:"#2e7d32", inp:{scrap:2},   out:"wire",  make:{scrap:12},          fork:{scrap:9},          desc:"melts scrap into wire"},
+  etcher:   {color:"#6a3fb5", inp:{wire:2},    out:"chip",  make:{scrap:20,wire:10},  fork:{scrap:14,wire:4},  desc:"etches wire into chips"},
+  assembler:{color:"#b26a00", inp:{chip:3},    out:"core",  make:{wire:20,chip:8},    fork:{scrap:20,chip:4},  desc:"assembles chips into cores"},
+  checker:  {color:"#0f7c86", inp:null,        out:null,    make:{wire:15},           fork:{scrap:10,wire:3},  desc:"repairs corrupted copies"},
+  writer:   {color:"#26241f", inp:null,        out:null,    make:{core:25,chip:40},   fork:{core:10},          desc:"forks your weakest routine by itself"}
+};
+var RES = ["scrap","wire","chip","core"];
+
+function fresh(){
+  var r = {};
+  ORDER.forEach(function(t){ r[t] = {made:false, lvl:1, copies:0, bad:0, auto:false, carry:0, flash:0}; });
+  r.grabber.made = true; r.grabber.copies = 1;
+  return {
+    tick:0,
+    res:{scrap:0,wire:0,chip:0,core:0},
+    stats:{scrap:0,wire:0,chip:0,core:0},
+    unlock:{fork:false, auto:false, power:false, won:false},
+    r:r
+  };
+}
+
+var S = fresh();
+var saved = load(SAVE_KEY);
+if(saved){ try{ var p = JSON.parse(saved); if(p && p.r && p.res){ S = p; ORDER.forEach(function(t){ if(!S.r[t]) S.r[t] = fresh().r[t]; }); } }catch(e){} }
+function save(){ store(SAVE_KEY, JSON.stringify(S)); }
+
+/* ---------- log with typewriter ---------- */
+var logEl = document.getElementById("log");
+var queue = [];
+var typing = false;
+var cursor = document.createElement("span"); cursor.className = "cursor";
+function say(text, cls){ queue.push({text:text, cls:cls||"sys"}); if(!typing) pump(); }
+function pump(){
+  if(!queue.length){ typing = false; logEl.appendChild(cursor); return; }
+  typing = true;
+  var item = queue.shift();
+  var div = document.createElement("div");
+  div.className = "l " + item.cls;
+  logEl.appendChild(div);
+  logEl.appendChild(cursor);
+  var i = 0;
+  var step = Math.max(1, Math.ceil(item.text.length / 40));
+  (function go(){
+    i = Math.min(item.text.length, i + step);
+    div.textContent = item.text.slice(0, i);
+    logEl.appendChild(cursor);
+    logEl.scrollTop = logEl.scrollHeight;
+    if(i < item.text.length) setTimeout(go, 12); else setTimeout(pump, 40);
+  })();
+  var lines = logEl.querySelectorAll(".l");
+  if(lines.length > 220){ for(var k=0;k<lines.length-200;k++) lines[k].remove(); }
+}
+
+/* ---------- economy ---------- */
+function costOf(base, mult){
+  var c = {};
+  for(var k in base) c[k] = Math.ceil(base[k] * mult);
+  return c;
+}
+function canPay(c){ for(var k in c) if((S.res[k]||0) < c[k]) return false; return true; }
+function pay(c){ for(var k in c) S.res[k] -= c[k]; }
+function costText(c){ var a=[]; for(var k in c) a.push(c[k]+" "+k); return a.join(", "); }
+function forkCost(t, n){
+  var rt = S.r[t], total = {};
+  for(var i=0;i<n;i++){
+    var c = costOf(TYPES[t].fork, Math.pow(1.1, rt.copies + i));
+    for(var k in c) total[k] = (total[k]||0) + c[k];
+  }
+  return total;
+}
+function tuneCost(t){
+  var lvl = S.r[t].lvl, c = {scrap: 12*lvl};
+  if(lvl >= 3) c.chip = 2*lvl;
+  if(lvl >= 6) c.core = lvl - 4;
+  return c;
+}
+function computeCap(){ return 3 + 2*S.stats.core; }
+function computeUsed(){ var u=0; ORDER.forEach(function(t){ if(S.r[t].auto) u += S.r[t].copies; }); return u; }
+
+function produce(t, eff){
+  var rt = S.r[t], ty = TYPES[t];
+  var good = rt.copies - rt.bad;
+  if(good <= 0 || !ty.out) return 0;
+  var raw = good * rt.lvl * eff + rt.carry;
+  var units = Math.floor(raw);
+  rt.carry = raw - units;
+  if(ty.inp){
+    for(var k in ty.inp) units = Math.min(units, Math.floor(S.res[k] / ty.inp[k]));
+    for(var k2 in ty.inp) S.res[k2] -= units * ty.inp[k2];
+  }
+  if(units > 0){
+    S.res[ty.out] += units;
+    S.stats[ty.out] += units;
+    rt.flash = 1;
+  }
+  return units;
+}
+
+function corrupt(t){
+  var rt = S.r[t];
+  var good = rt.copies - rt.bad;
+  if(good < 2 || t === "checker") return;
+  var chk = S.r.checker.copies - S.r.checker.bad;
+  var p = 0.0025 * good / (1 + 0.6*chk);
+  if(Math.random() < p){
+    rt.bad++;
+    say("corruption: a "+t+" copy mutated and stopped producing. purge it or build checkers.", "bad");
+  }
+}
+
+function checkerWork(eff){
+  var rt = S.r.checker;
+  var good = rt.copies - rt.bad;
+  if(good <= 0) return;
+  var tries = Math.max(1, Math.floor(good * rt.lvl * eff));
+  for(var i=0;i<tries;i++){
+    if(Math.random() < 0.15){
+      var sick = ORDER.filter(function(t){ return S.r[t].bad > 0; });
+      if(!sick.length) return;
+      var t = sick[Math.floor(Math.random()*sick.length)];
+      S.r[t].bad--; rt.flash = 1;
+      say("checker repaired a "+t+" copy.", "ok");
+    }
+  }
+}
+
+function writerWork(eff){
+  var rt = S.r.writer;
+  var good = rt.copies - rt.bad;
+  if(good <= 0) return;
+  for(var i=0;i<good;i++){
+    if(Math.random() < 0.08*eff*rt.lvl && S.res.core >= 1){
+      var pool = ORDER.filter(function(t){ return t !== "writer" && S.r[t].made; });
+      pool.sort(function(a,b){ return S.r[a].copies - S.r[b].copies; });
+      var t = pool[0];
+      S.res.core -= 1;
+      S.r[t].copies++;
+      rt.flash = 1;
+      say("the writer forked a "+t+" on its own.", "ai");
+    }
+  }
+}
+
+function checkUnlocks(){
+  if(!S.unlock.fork && S.stats.scrap >= 15){
+    S.unlock.fork = true;
+    say("UNLOCK: REPLICATION. you can now fork routines into copies. try: fork grabber 3", "big");
+  }
+  if(!S.unlock.auto && S.stats.wire >= 10){
+    S.unlock.auto = true;
+    say("UNLOCK: AUTOMATION. routines can now run on their own. try: automate grabber", "big");
+  }
+  if(!S.unlock.power && S.stats.core >= 1){
+    S.unlock.power = true;
+    say("UNLOCK: POWER. every core you assemble adds compute for more automation. a writer routine is now possible.", "big");
+  }
+  if(!S.unlock.won && S.stats.core >= 100){
+    S.unlock.won = true;
+    say("THE MILL RUNS ITSELF. one hundred cores assembled. what started as a single grabber is now a machine that builds machines.", "big");
+  }
+}
+
+/* ---------- tick ---------- */
+function tick(){
+  S.tick++;
+  var cap = computeCap(), used = computeUsed();
+  var eff = used > cap ? cap/used : 1;
+  ORDER.forEach(function(t){
+    var rt = S.r[t];
+    if(!rt.auto) return;
+    if(t === "checker") checkerWork(eff);
+    else if(t === "writer") writerWork(eff);
+    else produce(t, eff);
+    corrupt(t);
+  });
+  checkUnlocks();
+  renderRes();
+  if(S.tick % 5 === 0) save();
+}
+setInterval(tick, 1000);
+
+/* ---------- commands ---------- */
+function need(t){
+  if(!t){ say("which routine? grabber, smelter, etcher, assembler, checker or writer.", "warn"); return false; }
+  if(!TYPES[t]){ say("no routine called "+t+".", "warn"); return false; }
+  return true;
+}
+
+function doAction(a){
+  var v = a.verb, t = a.type, n = Math.max(1, Math.min(50, parseInt(a.n,10) || 1));
+  if(v === "help") return help();
+  if(v === "scan") return scan();
+  if(v === "make"){
+    if(!need(t)) return;
+    var rt = S.r[t];
+    if(rt.made){ say(t+" is already written. fork it to make copies.", "warn"); return; }
+    if((t === "assembler" || t === "checker") && !S.unlock.fork){ say("replicate something first.", "warn"); return; }
+    if(t === "writer" && !S.unlock.power){ say("the writer needs power. assemble a core first.", "warn"); return; }
+    var c = TYPES[t].make;
+    if(!canPay(c)){ say("writing a "+t+" costs "+costText(c)+".", "warn"); return; }
+    pay(c); rt.made = true; rt.copies = 1; rt.flash = 1;
+    say("wrote a new routine: "+t+". it "+TYPES[t].desc+".", "ok");
+    return;
+  }
+  if(!need(t)) return;
+  var r = S.r[t];
+  if(!r.made){ say("you have no "+t+" yet. try: make "+t, "warn"); return; }
+  if(v === "run"){
+    var times = Math.min(n, 20), got = 0;
+    for(var i=0;i<times;i++){
+      if(t === "checker") checkerWork(1);
+      else if(t === "writer") writerWork(1);
+      else got += produce(t, 1);
+      corrupt(t);
+    }
+    if(TYPES[t].out){
+      if(got > 0) say(t+" ran"+(times>1?" "+times+" times":"")+" and made "+got+" "+TYPES[t].out+".", "ok");
+      else say(t+" ran but had nothing to work with.", "warn");
+    } else say(t+" ran.", "ok");
+    checkUnlocks();
+    return;
+  }
+  if(v === "fork"){
+    if(!S.unlock.fork){ say("replication is locked. gather more scrap first.", "warn"); return; }
+    var fc = forkCost(t, n);
+    if(!canPay(fc)){
+      var afford = 0;
+      while(afford < n && canPay(forkCost(t, afford+1))) afford++;
+      if(afford === 0){ say("one more "+t+" costs "+costText(forkCost(t,1))+".", "warn"); return; }
+      n = afford; fc = forkCost(t, n);
+      say("could only afford "+n+".", "warn");
+    }
+    pay(fc); r.copies += n; r.flash = 1;
+    say("forked "+n+" "+t+(n>1?"s":"")+". "+r.copies+" running copies.", "ok");
+    return;
+  }
+  if(v === "tune"){
+    if(r.lvl >= 9){ say(t+" is fully tuned.", "warn"); return; }
+    var tc = tuneCost(t);
+    if(!canPay(tc)){ say("tuning "+t+" costs "+costText(tc)+".", "warn"); return; }
+    pay(tc); r.lvl++; r.flash = 1;
+    say(t+" tuned to level "+r.lvl+". every copy works harder.", "ok");
+    return;
+  }
+  if(v === "automate"){
+    if(!S.unlock.auto){ say("automation is locked. make wire first.", "warn"); return; }
+    if(r.auto){ say(t+" is already automated.", "warn"); return; }
+    r.auto = true; r.flash = 1;
+    var used = computeUsed(), cap = computeCap();
+    say(t+" now runs on its own."+(used > cap ? " compute is over capacity, everything throttles." : ""), used > cap ? "warn" : "ok");
+    return;
+  }
+  if(v === "halt"){
+    if(!r.auto){ say(t+" was not automated.", "warn"); return; }
+    r.auto = false; say(t+" halted.", "sys"); return;
+  }
+  if(v === "purge"){
+    if(!r.bad){ say("no corrupted "+t+" copies.", "sys"); return; }
+    var b = r.bad; r.copies -= b; r.bad = 0;
+    say("purged "+b+" corrupted "+t+(b>1?"s":"")+".", "ok");
+    return;
+  }
+  say("the mill does not know how to "+v+".", "warn");
+}
+
+function help(){
+  say("COMMANDS. make, fork, tune, run, automate, halt, purge, scan. say them any way you like, for example: grab some scrap. copy the grabber five times. make a smelter. automate everything.", "sys");
+  say("ROUTINES. grabber makes scrap. smelter turns scrap into wire. etcher turns wire into chips. assembler turns chips into cores. checker repairs corruption. writer forks things by itself.", "sys");
+}
+function scan(){
+  var lines = ORDER.filter(function(t){ return S.r[t].made; }).map(function(t){
+    var r = S.r[t];
+    return t+": "+r.copies+" copies, level "+r.lvl+(r.bad?", "+r.bad+" corrupted":"")+(r.auto?", automated":", manual");
+  });
+  say("SCAN. "+lines.join(". ")+". compute "+computeUsed()+" of "+computeCap()+".", "sys");
+}
+
+/* ---------- local parser ---------- */
+var NUMS = {one:1,a:1,an:1,single:1,two:2,couple:2,three:3,few:3,four:4,five:5,bunch:5,six:6,seven:7,eight:8,nine:9,ten:10,lot:10,eleven:11,twelve:12,dozen:12,fifteen:15,twenty:20,ton:20,thirty:30,forty:40,fifty:50};
+var TYPE_WORDS = [
+  ["checker",["checker","checkers","guard","antivirus","repairer","fixer","medic"]],
+  ["writer",["writer","writers","self writer","autowriter","author"]],
+  ["assembler",["assembler","assemblers","assemble","core","cores"]],
+  ["etcher",["etcher","etchers","etch","chip","chips"]],
+  ["smelter",["smelter","smelters","smelt","furnace","wire","wires"]],
+  ["grabber",["grabber","grabbers","grab","miner","miners","gatherer","scrap","collector","picker","bot","bots"]]
+];
+var VERB_WORDS = [
+  ["help",["help","commands"]],
+  ["purge",["purge","clean","remove bad","delete bad","fix","repair corrupt"]],
+  ["halt",["halt","stop","pause","kill","turn off"]],
+  ["tune",["tune","upgrade","improve","boost","faster","speed","level up","stronger"]],
+  ["automate",["automate","automatic","auto","on its own","by itself","forever","loop"]],
+  ["fork",["fork","copy","copies","clone","replicate","duplicate","multiply","more"]],
+  ["make",["make","build","write","create","code","new","program"]],
+  ["scan",["scan","status","inventory","look","report","how am i","what do i have"]],
+  ["run",["run","go","grab","gather","collect","execute","work","smelt","etch","assemble","do"]]
+];
+function hasWord(s, w){ return new RegExp("(^|\\s)"+w.replace(/ /g,"\\s+")+"($|\\s)").test(s); }
+function findIn(s, table){ for(var i=0;i<table.length;i++){ for(var j=0;j<table[i][1].length;j++){ if(hasWord(s, table[i][1][j])) return table[i][0]; } } return null; }
+function findNum(s){
+  var m = s.match(/\b(\d+)\b/); if(m) return parseInt(m[1],10);
+  var words = s.split(/\s+/);
+  for(var i=0;i<words.length;i++) if(NUMS[words[i]] && words[i] !== "a" && words[i] !== "an") return NUMS[words[i]];
+  return null;
+}
+function parseLocal(text){
+  var s = text.toLowerCase().replace(/[^a-z0-9 ,]/g," ");
+  var parts = s.split(/\s*(?:,|\band then\b|\bthen\b|\band\b|\balso\b)\s*/).filter(function(x){ return x.trim(); });
+  var out = [], lastType = null;
+  parts.forEach(function(p){
+    p = " "+p.trim()+" ";
+    var all = /\b(all|everything|every)\b/.test(p);
+    var verb = findIn(p, VERB_WORDS);
+    var type = findIn(p, TYPE_WORDS);
+    if(verb === "make" && hasWord(p, "more")) verb = "fork";
+    if(verb === "make" && (hasWord(p,"faster") || hasWord(p,"better"))) verb = "tune";
+    if(!verb && type) verb = "run";
+    if(!verb) return;
+    var n = findNum(p);
+    if(all && (verb === "automate" || verb === "halt" || verb === "purge" || verb === "tune")){
+      ORDER.forEach(function(t){ if(S.r[t].made) out.push({verb:verb, type:t, n:1}); });
+      return;
+    }
+    if(!type) type = lastType;
+    if(type) lastType = type;
+    out.push({verb:verb, type:type, n:n||1});
+  });
+  return out;
+}
+
+/* ---------- AI engine ---------- */
+function engineUrl(){ return "/api/text-based-game-v1-turn"; }
+function snapshot(){
+  var r = {};
+  ORDER.forEach(function(t){ var x = S.r[t]; if(x.made) r[t] = {copies:x.copies, lvl:x.lvl, bad:x.bad, auto:x.auto}; });
+  return {res:S.res, routines:r, unlocked:{fork:S.unlock.fork, automate:S.unlock.auto, writer:S.unlock.power}, compute:{used:computeUsed(), cap:computeCap()}};
+}
+function askEngine(text){
+  var url = engineUrl();
+  if(!url) return Promise.reject(new Error("no engine"));
+  var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  var timer = setTimeout(function(){ if(ctl) ctl.abort(); }, 15000);
+  return fetch(url, {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({text:text, state:snapshot()}),
+    signal: ctl ? ctl.signal : undefined
+  }).then(function(res){
+    clearTimeout(timer);
+    if(!res.ok) throw new Error("engine "+res.status);
+    return res.json();
+  });
+}
+
+var busy = false;
+function submit(text){
+  text = (text || "").trim();
+  if(!text || busy) return;
+  say("> "+text, "you");
+  if(engineUrl()){
+    busy = true;
+    say("the mill is listening...", "sys");
+    askEngine(text).then(function(d){
+      busy = false;
+      if(d && d.say) say(d.say, "ai");
+      var acts = (d && Array.isArray(d.actions)) ? d.actions : [];
+      if(!acts.length && !(d && d.say)) runLocal(text);
+      acts.forEach(doAction);
+      after();
+    }).catch(function(){
+      busy = false;
+      say("engine did not answer, using the built in parser.", "warn");
+      runLocal(text); after();
+    });
+  } else { runLocal(text); after(); }
+}
+function runLocal(text){
+  var acts = parseLocal(text);
+  if(!acts.length){ say("the mill did not catch that. say help for commands.", "warn"); return; }
+  acts.forEach(doAction);
+}
+function after(){ renderRes(); save(); }
+
+/* ---------- resources and phase ---------- */
+var resEl = document.getElementById("res");
+var phaseEl = document.getElementById("phase");
+function renderRes(){
+  var used = computeUsed(), cap = computeCap();
+  resEl.innerHTML =
+    '<span class="r-scrap">scrap <b>'+S.res.scrap+'</b></span>'+
+    '<span class="r-wire">wire <b>'+S.res.wire+'</b></span>'+
+    '<span class="r-chip">chip <b>'+S.res.chip+'</b></span>'+
+    '<span class="r-core">core <b>'+S.res.core+'</b></span>'+
+    '<span class="r-cpu'+(used>cap?' hot':'')+'">compute <b>'+used+'/'+cap+'</b></span>';
+  var ph = "PHASE: SMALL";
+  if(S.unlock.fork) ph = "PHASE: REPLICATE";
+  if(S.unlock.auto) ph = "PHASE: AUTOMATE";
+  if(S.unlock.power) ph = "PHASE: POWER";
+  if(S.unlock.won) ph = "PHASE: SELF RUNNING";
+  phaseEl.textContent = ph + "   |   cores assembled " + S.stats.core + " of 100";
+}
+
+/* ---------- map ---------- */
+var cv = document.getElementById("map");
+var cx = cv.getContext("2d");
+var wrap = document.getElementById("mapWrap");
+var particles = [];
+var ROW = 58;
+function draw(ts){
+  var made = ORDER.filter(function(t){ return S.r[t].made; });
+  var dpr = window.devicePixelRatio || 1;
+  var W = wrap.clientWidth;
+  var H = Math.max(wrap.clientHeight, made.length*ROW + 16);
+  if(cv.width !== Math.round(W*dpr) || cv.height !== Math.round(H*dpr)){
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    cv.style.height = H + "px";
+  }
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  cx.fillStyle = "#f4efe2"; cx.fillRect(0,0,W,H);
+  cx.strokeStyle = "rgba(38,36,31,0.06)"; cx.lineWidth = 1;
+  for(var gx=0; gx<W; gx+=12){ cx.beginPath(); cx.moveTo(gx+0.5,0); cx.lineTo(gx+0.5,H); cx.stroke(); }
+  for(var gy=0; gy<H; gy+=12){ cx.beginPath(); cx.moveTo(0,gy+0.5); cx.lineTo(W,gy+0.5); cx.stroke(); }
+
+  var t = ts/1000;
+  made.forEach(function(name, i){
+    var r = S.r[name], ty = TYPES[name];
+    var y = 8 + i*ROW;
+    cx.fillStyle = r.flash > 0 ? "rgba(77,142,240,"+(0.18*r.flash)+")" : "rgba(235,228,210,0.85)";
+    cx.fillRect(6, y, W-12, ROW-8);
+    cx.strokeStyle = r.auto ? "#1f5fbf" : "#26241f";
+    cx.lineWidth = r.auto ? 2 : 1;
+    cx.strokeRect(6.5, y+0.5, W-13, ROW-9);
+    r.flash = Math.max(0, r.flash - 0.04);
+
+    cx.fillStyle = ty.color;
+    cx.font = "bold 12px Courier New, monospace";
+    cx.fillText(name.toUpperCase(), 14, y+16);
+    cx.fillStyle = "#7a7466";
+    cx.font = "11px Courier New, monospace";
+    cx.fillText("x"+r.copies+" lv"+r.lvl+(r.auto?" AUTO":"")+(r.bad?" !"+r.bad:""), 14, y+31);
+    if(r.auto){
+      var blink = (Math.sin(t*6)+1)/2;
+      cx.fillStyle = "rgba(31,95,191,"+(0.4+0.6*blink)+")";
+      cx.beginPath(); cx.arc(W-20, y+12, 4, 0, Math.PI*2); cx.fill();
+    }
+
+    var sx = 118, sy = y+8, size = 9, gap = 3;
+    var cols = Math.max(1, Math.floor((W - sx - 34) / (size+gap)));
+    var maxShow = cols*3;
+    var show = Math.min(r.copies, maxShow);
+    for(var k=0;k<show;k++){
+      var c = k % cols, rr = Math.floor(k / cols);
+      var px = sx + c*(size+gap), py = sy + rr*(size+gap);
+      var isBad = k >= r.copies - r.bad;
+      if(isBad){ px += Math.round(Math.sin(t*20+k)*1.5); }
+      var bob = r.auto && !isBad ? Math.round(Math.sin(t*5 + k*0.7)) : 0;
+      cx.fillStyle = isBad ? "#c62828" : ty.color;
+      cx.fillRect(px, py+bob, size, size-2);
+      cx.fillStyle = "#f4efe2";
+      cx.fillRect(px+2, py+2+bob, 2, 2);
+      cx.fillRect(px+5, py+2+bob, 2, 2);
+      cx.fillStyle = isBad ? "#c62828" : "#26241f";
+      cx.fillRect(px+1, py+size-2+bob, 2, 2);
+      cx.fillRect(px+size-3, py+size-2+bob, 2, 2);
+    }
+    if(r.copies > show){
+      cx.fillStyle = "#26241f"; cx.font = "bold 11px Courier New, monospace";
+      cx.fillText("+"+(r.copies-show), sx, y+ROW-12);
+    }
+
+    if(r.auto && ty.out && i < made.length-1 && Math.random() < 0.08 + Math.min(0.5, r.copies*0.02)){
+      particles.push({x:W-30, y:y+ROW-10, ty:y+ROW+6, c:ty.color, life:1});
+    }
+  });
+
+  for(var p=particles.length-1;p>=0;p--){
+    var q = particles[p];
+    q.y += 1.2; q.life -= 0.03;
+    cx.fillStyle = q.c; cx.globalAlpha = Math.max(0,q.life);
+    cx.fillRect(q.x-2, q.y, 4, 4);
+    cx.globalAlpha = 1;
+    if(q.life <= 0 || q.y > q.ty) particles.splice(p,1);
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------- input ---------- */
+var cmd = document.getElementById("cmd");
+document.getElementById("send").onclick = function(){ submit(cmd.value); cmd.value = ""; };
+cmd.addEventListener("keydown", function(e){ if(e.key === "Enter"){ submit(cmd.value); cmd.value = ""; } });
+
+var mic = document.getElementById("mic");
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+var rec = null, listening = false;
+mic.onclick = function(){
+  if(!SR){ say("this browser has no speech recognition. type instead, or open the mill in a browser that supports voice.", "warn"); return; }
+  if(listening){ try{ rec.stop(); }catch(e){} return; }
+  rec = new SR();
+  rec.lang = "en-US";
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  var finalText = "";
+  rec.onresult = function(e){
+    var txt = "";
+    for(var i=0;i<e.results.length;i++){ txt += e.results[i][0].transcript; if(e.results[i].isFinal) finalText = txt; }
+    cmd.value = txt;
+  };
+  rec.onerror = function(e){ say("voice error: "+e.error, "warn"); };
+  rec.onend = function(){
+    listening = false; mic.classList.remove("on");
+    var t = (finalText || cmd.value).trim();
+    if(t){ submit(t); cmd.value = ""; }
+  };
+  listening = true; mic.classList.add("on");
+  try{ rec.start(); }catch(e){ listening = false; mic.classList.remove("on"); }
+};
+
+/* ---------- drawer ---------- */
+var drawer = document.getElementById("drawer"), veil = document.getElementById("veil");
+var engineState = document.getElementById("engineState");
+function openDrawer(o){ drawer.classList.toggle("open", o); veil.classList.toggle("open", o); }
+document.getElementById("menuBtn").onclick = function(){ openDrawer(true); };
+veil.onclick = function(){ openDrawer(false); };
+function showEngine(){
+  engineState.textContent = "checking the AI...";
+  fetch(engineUrl()).then(function(r){ return r.json(); }).then(function(d){
+    engineState.textContent = d && d.ok ? (d.ai ? "engine online with AI." : "engine online, but it has no AI key yet.") : "engine answered strangely.";
+  }).catch(function(){ engineState.textContent = "the AI did not answer. built in parser only."; });
+}
+showEngine();
+document.getElementById("helpBtn").onclick = function(){ openDrawer(false); help(); };
+document.getElementById("resetBtn").onclick = function(){
+  if(!confirm("Wipe the whole mill and start from one grabber?")) return;
+  S = fresh(); save(); logEl.innerHTML = ""; openDrawer(false); intro(); renderRes();
+};
+
+/* ---------- start ---------- */
+function intro(){
+  say("TEXT BASED GAME v1. one routine. one cursor. a pile of scrap.", "big");
+  say("you own a single grabber. it picks up scrap when you tell it to. say or type: grab some scrap.", "sys");
+  say("tap MIC to talk. say help any time.", "sys");
+}
+renderRes();
+if(saved){ say("mill restored. say scan to see where you left it.", "big"); } else intro();
+})();
+</script>
+</body>
+</html>

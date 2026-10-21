@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/text-based-game-v1.html" }
+  ]
+}
