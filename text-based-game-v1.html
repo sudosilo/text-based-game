@@ -55,7 +55,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 #drawer input{font:inherit;font-size:15px;width:100%;padding:8px;border:2px solid var(--ink);border-radius:4px;background:var(--paper2);color:var(--ink)}
 #drawer .btn{padding:10px}
 #drawer p{font-size:12px;color:var(--dim);line-height:1.4}
-#engineState{font-size:12px}
 #veil{position:fixed;inset:0;background:rgba(38,36,31,0.25);display:none;z-index:55}
 #veil.open{display:block}
 </style>
@@ -78,8 +77,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 <div id="veil"></div>
 <div id="drawer">
   <h3>MILL SETTINGS</h3>
-  <div id="engineState" class="sys"></div>
-  <p>The AI turns whatever you say into mill commands. If it does not answer, the mill reads your words with its built in parser.</p>
   <button class="btn" id="helpBtn">SHOW COMMANDS</button>
   <button class="btn" id="resetBtn" style="border-color:var(--red);color:var(--red)">WIPE THE MILL</button>
   <p>text based game v1</p>
@@ -469,7 +466,6 @@ function submit(text){
       after();
     }).catch(function(){
       busy = false;
-      say("engine did not answer, using the built in parser.", "warn");
       runLocal(text); after();
     });
   } else { runLocal(text); after(); }
@@ -618,17 +614,9 @@ mic.onclick = function(){
 
 /* ---------- drawer ---------- */
 var drawer = document.getElementById("drawer"), veil = document.getElementById("veil");
-var engineState = document.getElementById("engineState");
 function openDrawer(o){ drawer.classList.toggle("open", o); veil.classList.toggle("open", o); }
 document.getElementById("menuBtn").onclick = function(){ openDrawer(true); };
 veil.onclick = function(){ openDrawer(false); };
-function showEngine(){
-  engineState.textContent = "checking the AI...";
-  fetch(engineUrl()).then(function(r){ return r.json(); }).then(function(d){
-    engineState.textContent = d && d.ok ? (d.ai ? "engine online with AI." : "engine online, but it has no AI key yet.") : "engine answered strangely.";
-  }).catch(function(){ engineState.textContent = "the AI did not answer. built in parser only."; });
-}
-showEngine();
 document.getElementById("helpBtn").onclick = function(){ openDrawer(false); help(); };
 document.getElementById("resetBtn").onclick = function(){
   if(!confirm("Wipe the whole mill and start from one grabber?")) return;
