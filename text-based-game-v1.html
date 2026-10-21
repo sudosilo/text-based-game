@@ -33,20 +33,23 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 .r-scrap b{color:var(--amber)}.r-wire b{color:var(--green)}.r-chip b{color:var(--violet)}.r-core b{color:var(--blue)}.r-cpu b{color:var(--ink)}
 .r-cpu.hot b{color:var(--red)}
 #phase{font-size:11px;letter-spacing:2px;color:var(--dim);padding:4px 14px;border-bottom:1px dashed var(--line)}
-#mapWrap{height:34vh;min-height:150px;overflow-y:auto;border-bottom:2px solid var(--ink);background:var(--paper)}
-#map{display:block;width:100%}
+#mapWrap{height:36vh;min-height:190px;border-bottom:2px solid var(--ink);background:var(--paper)}
+#map{display:block;width:100%;height:100%}
 #log{flex:1;overflow-y:auto;padding:10px 14px 16px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .l{margin-bottom:4px}
 .sys{color:var(--dim)}.you{color:var(--blue);font-weight:bold}.ok{color:var(--green)}.warn{color:var(--amber)}.bad{color:var(--red)}.ai{color:var(--violet)}.big{color:var(--blue);font-weight:bold;text-shadow:0 0 6px rgba(31,95,191,0.3)}
 .cursor{display:inline-block;width:8px;height:14px;background:var(--blue);vertical-align:-2px;animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
-#bar{display:flex;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:2px solid var(--ink);background:var(--paper2)}
+#bar{display:flex;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:var(--paper2)}
 #bar .prompt{align-self:center;color:var(--blue);font-weight:bold}
 #cmd{flex:1;min-width:0;font:inherit;font-size:16px;background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:4px;padding:8px}
 #cmd:focus{outline:none;border-color:var(--blue)}
 .btn{font:inherit;font-weight:bold;border:2px solid var(--ink);background:var(--paper);color:var(--ink);border-radius:4px;padding:0 12px;cursor:pointer}
-#mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1s infinite}
-@keyframes pulse{50%{opacity:0.6}}
+#hints{display:flex;gap:6px;overflow-x:auto;padding:8px 10px 0;background:var(--paper2);border-top:2px solid var(--ink);scrollbar-width:none}
+#hints::-webkit-scrollbar{display:none}
+#hints .label{align-self:center;font-size:11px;letter-spacing:2px;color:var(--dim);white-space:nowrap}
+.chip{font:inherit;font-size:13px;white-space:nowrap;border:2px solid var(--blue);color:var(--blue);background:var(--paper);border-radius:14px;padding:5px 11px;cursor:pointer}
+.chip:active{background:var(--blue);color:#fff}
 #send{background:var(--blue);color:#fff;border-color:var(--blue)}
 #drawer{position:fixed;top:0;right:0;bottom:0;width:min(330px,88vw);background:var(--paper);border-left:2px solid var(--ink);transform:translateX(105%);transition:transform .2s;z-index:60;padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
 #drawer.open{transform:none}
@@ -68,10 +71,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 <div id="phase"></div>
 <div id="mapWrap"><canvas id="map"></canvas></div>
 <div id="log"></div>
+<div id="hints"></div>
 <div id="bar">
   <span class="prompt">&gt;</span>
-  <input id="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="talk or type">
-  <button class="btn" id="mic" aria-label="voice">MIC</button>
+  <input id="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tell your crew what to do">
   <button class="btn" id="send">RUN</button>
 </div>
 <div id="veil"></div>
@@ -284,6 +287,7 @@ function need(t){
 
 function doAction(a){
   var v = a.verb, t = a.type, n = Math.max(1, Math.min(50, parseInt(a.n,10) || 1));
+  if(t && TYPES[t]) walkTo(t);
   if(v === "help") return help();
   if(v === "scan") return scan();
   if(v === "make"){
@@ -493,90 +497,182 @@ function renderRes(){
   if(S.unlock.auto) ph = "PHASE: AUTOMATE";
   if(S.unlock.power) ph = "PHASE: POWER";
   if(S.unlock.won) ph = "PHASE: SELF RUNNING";
-  phaseEl.textContent = ph + "   |   cores assembled " + S.stats.core + " of 100";
+  phaseEl.textContent = ph + "   |   NEXT: " + goal();
+  renderHints();
+}
+function goal(){
+  if(!S.unlock.fork) return "gather "+Math.max(0, 15 - S.stats.scrap)+" more scrap to unlock copying";
+  if(!S.r.smelter.made) return "make a smelter, it costs 12 scrap";
+  if(!S.unlock.auto) return "make "+Math.max(0, 10 - S.stats.wire)+" more wire to unlock automation";
+  if(!S.r.etcher.made) return "make an etcher to turn wire into chips";
+  if(!S.r.assembler.made) return "make an assembler to turn chips into cores";
+  if(!S.unlock.power) return "assemble your first core";
+  if(!S.unlock.won) return "assemble "+(100 - S.stats.core)+" more cores";
+  return "the workshop runs itself";
 }
 
-/* ---------- map ---------- */
+/* ---------- suggestions ---------- */
+var hintsEl = document.getElementById("hints");
+var lastHints = "";
+function hintList(){
+  var h = [], r = S.r;
+  var bad = ORDER.filter(function(t){ return r[t].bad > 0; });
+  if(bad.length) h.push("purge corrupted "+bad[0]+"s");
+  if(!S.unlock.fork){ h.push("grab some scrap"); h.push("run the grabber 10 times"); }
+  else {
+    if(S.res.scrap < 20) h.push(r.grabber.auto ? "scan" : "run the grabber 10 times");
+    if(r.grabber.copies < 4) h.push("fork the grabber 3 times");
+    if(!r.smelter.made) h.push("make a smelter");
+    else if(!S.unlock.auto) h.push("run the smelter 5 times");
+    if(S.unlock.auto){
+      var manual = ORDER.filter(function(t){ return r[t].made && !r[t].auto && t !== "writer"; });
+      if(manual.length) h.push("automate the "+manual[0]);
+      if(!r.etcher.made) h.push("make an etcher");
+      else if(!r.assembler.made) h.push("make an assembler");
+      else h.push("fork the "+["grabber","smelter","etcher","assembler"].sort(function(a,b){ return r[a].copies - r[b].copies; })[0]+" 2 times");
+      if(bad.length && !r.checker.made) h.push("make a checker");
+    }
+    if(S.unlock.power && !r.writer.made) h.push("make a writer");
+    if(computeUsed() > computeCap()) h.push("halt the grabber");
+  }
+  if(h.indexOf("scan") < 0) h.push("scan");
+  h.push("help");
+  return h.slice(0, 5);
+}
+function renderHints(){
+  var list = hintList();
+  var key = list.join("|");
+  if(key === lastHints) return;
+  lastHints = key;
+  hintsEl.innerHTML = '<span class="label">TRY</span>';
+  list.forEach(function(txt){
+    var b = document.createElement("button");
+    b.className = "chip"; b.textContent = txt;
+    b.onclick = function(){ submit(txt); };
+    hintsEl.appendChild(b);
+  });
+}
+
+/* ---------- tabletop board ---------- */
 var cv = document.getElementById("map");
 var cx = cv.getContext("2d");
 var wrap = document.getElementById("mapWrap");
-var particles = [];
-var ROW = 58;
+var SPOTS = {grabber:[0,0], smelter:[1,0], etcher:[2,0], assembler:[2,1], checker:[1,1], writer:[0,1]};
+var hero = {x:-1, y:-1, tx:-1, ty:-1, target:null};
+var walkers = {};
+function stationXY(t, W, H){
+  var m = 14, iw = W - m*2, ih = H - m*2;
+  var sp = SPOTS[t];
+  return {x: m + iw*(sp[0]*2+1)/6, y: m + ih*(sp[1]*2+1)/4};
+}
+function walkTo(t){ hero.target = t; }
+function shade(hex, k){
+  var n = parseInt(hex.slice(1),16), r = n>>16, g = (n>>8)&255, b = n&255;
+  r = Math.round(r + (255-r)*k); g = Math.round(g + (255-g)*k); b = Math.round(b + (255-b)*k);
+  return "rgb("+r+","+g+","+b+")";
+}
+function mini(x, y, col, size, bad, hat){
+  cx.fillStyle = "rgba(38,36,31,0.22)";
+  cx.beginPath(); cx.ellipse(x+1.5, y+2.5, size, size*0.8, 0, 0, Math.PI*2); cx.fill();
+  cx.fillStyle = "#26241f";
+  cx.beginPath(); cx.arc(x, y, size, 0, Math.PI*2); cx.fill();
+  cx.fillStyle = bad ? "#c62828" : col;
+  cx.beginPath(); cx.arc(x, y, size*0.78, 0, Math.PI*2); cx.fill();
+  cx.fillStyle = bad ? "#f4c0c0" : shade(col, 0.55);
+  cx.beginPath(); cx.arc(x, y - size*0.12, size*0.38, 0, Math.PI*2); cx.fill();
+  if(hat){
+    cx.fillStyle = "#f4efe2";
+    cx.beginPath();
+    for(var i=0;i<5;i++){
+      var a1 = -Math.PI/2 + i*Math.PI*2/5, a2 = a1 + Math.PI/5;
+      cx.lineTo(x + Math.cos(a1)*size*0.42, y - size*0.12 + Math.sin(a1)*size*0.42);
+      cx.lineTo(x + Math.cos(a2)*size*0.18, y - size*0.12 + Math.sin(a2)*size*0.18);
+    }
+    cx.closePath(); cx.fill();
+  }
+  if(bad){
+    cx.strokeStyle = "#f4efe2"; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.moveTo(x-3,y-3); cx.lineTo(x+3,y+3); cx.moveTo(x+3,y-3); cx.lineTo(x-3,y+3); cx.stroke();
+  }
+}
 function draw(ts){
-  var made = ORDER.filter(function(t){ return S.r[t].made; });
   var dpr = window.devicePixelRatio || 1;
-  var W = wrap.clientWidth;
-  var H = Math.max(wrap.clientHeight, made.length*ROW + 16);
+  var W = wrap.clientWidth, H = wrap.clientHeight;
   if(cv.width !== Math.round(W*dpr) || cv.height !== Math.round(H*dpr)){
     cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
-    cv.style.height = H + "px";
   }
   cx.setTransform(dpr,0,0,dpr,0,0);
-  cx.fillStyle = "#f4efe2"; cx.fillRect(0,0,W,H);
-  cx.strokeStyle = "rgba(38,36,31,0.06)"; cx.lineWidth = 1;
-  for(var gx=0; gx<W; gx+=12){ cx.beginPath(); cx.moveTo(gx+0.5,0); cx.lineTo(gx+0.5,H); cx.stroke(); }
-  for(var gy=0; gy<H; gy+=12){ cx.beginPath(); cx.moveTo(0,gy+0.5); cx.lineTo(W,gy+0.5); cx.stroke(); }
-
   var t = ts/1000;
-  made.forEach(function(name, i){
-    var r = S.r[name], ty = TYPES[name];
-    var y = 8 + i*ROW;
-    cx.fillStyle = r.flash > 0 ? "rgba(77,142,240,"+(0.18*r.flash)+")" : "rgba(235,228,210,0.85)";
-    cx.fillRect(6, y, W-12, ROW-8);
-    cx.strokeStyle = r.auto ? "#1f5fbf" : "#26241f";
-    cx.lineWidth = r.auto ? 2 : 1;
-    cx.strokeRect(6.5, y+0.5, W-13, ROW-9);
-    r.flash = Math.max(0, r.flash - 0.04);
 
-    cx.fillStyle = ty.color;
-    cx.font = "bold 12px Courier New, monospace";
-    cx.fillText(name.toUpperCase(), 14, y+16);
-    cx.fillStyle = "#7a7466";
-    cx.font = "11px Courier New, monospace";
-    cx.fillText("x"+r.copies+" lv"+r.lvl+(r.auto?" AUTO":"")+(r.bad?" !"+r.bad:""), 14, y+31);
-    if(r.auto){
-      var blink = (Math.sin(t*6)+1)/2;
-      cx.fillStyle = "rgba(31,95,191,"+(0.4+0.6*blink)+")";
-      cx.beginPath(); cx.arc(W-20, y+12, 4, 0, Math.PI*2); cx.fill();
+  // table and floor tiles
+  cx.fillStyle = "#d9cfb6"; cx.fillRect(0,0,W,H);
+  var m = 8, tile = 22;
+  cx.fillStyle = "#efe7d3"; cx.fillRect(m, m, W-m*2, H-m*2);
+  cx.strokeStyle = "rgba(38,36,31,0.13)"; cx.lineWidth = 1;
+  for(var gx=m; gx<=W-m; gx+=tile){ cx.beginPath(); cx.moveTo(gx+0.5,m); cx.lineTo(gx+0.5,H-m); cx.stroke(); }
+  for(var gy=m; gy<=H-m; gy+=tile){ cx.beginPath(); cx.moveTo(m,gy+0.5); cx.lineTo(W-m,gy+0.5); cx.stroke(); }
+  cx.strokeStyle = "#26241f"; cx.lineWidth = 3;
+  cx.strokeRect(m+1.5, m+1.5, W-m*2-3, H-m*2-3);
+  // doorway
+  cx.fillStyle = "#efe7d3"; cx.fillRect(W/2-14, H-m-3, 28, 4);
+
+  // stations and their crews
+  ORDER.forEach(function(name){
+    var r = S.r[name], ty = TYPES[name], p = stationXY(name, W, H);
+    if(!r.made){
+      cx.setLineDash([4,4]); cx.strokeStyle = "rgba(38,36,31,0.18)"; cx.lineWidth = 1.5;
+      cx.strokeRect(p.x-16, p.y-12, 32, 24); cx.setLineDash([]);
+      return;
     }
+    // workbench
+    cx.fillStyle = "rgba(38,36,31,0.18)"; cx.fillRect(p.x-15, p.y-9, 32, 22);
+    cx.fillStyle = r.flash > 0 ? shade(ty.color, 0.35 - 0.2*r.flash) : shade(ty.color, 0.7);
+    cx.fillRect(p.x-17, p.y-11, 32, 22);
+    cx.strokeStyle = r.auto ? "#1f5fbf" : "#26241f"; cx.lineWidth = r.auto ? 2.5 : 1.5;
+    cx.strokeRect(p.x-17, p.y-11, 32, 22);
+    // output pile beside the bench
+    if(ty.out){
+      var pile = Math.min(9, Math.ceil(Math.sqrt(S.res[ty.out] || 0)));
+      for(var k=0;k<pile;k++){
+        cx.fillStyle = ty.color;
+        cx.fillRect(p.x+18 + (k%3)*5, p.y+6 - Math.floor(k/3)*5, 4, 4);
+      }
+    }
+    cx.fillStyle = "#26241f"; cx.font = "bold 10px Courier New, monospace"; cx.textAlign = "center";
+    cx.fillText(name.toUpperCase()+(r.lvl>1?" "+r.lvl:""), p.x, p.y + 42);
+    cx.textAlign = "left";
+    r.flash = Math.max(0, r.flash - 0.03);
 
-    var sx = 118, sy = y+8, size = 9, gap = 3;
-    var cols = Math.max(1, Math.floor((W - sx - 34) / (size+gap)));
-    var maxShow = cols*3;
-    var show = Math.min(r.copies, maxShow);
-    for(var k=0;k<show;k++){
-      var c = k % cols, rr = Math.floor(k / cols);
-      var px = sx + c*(size+gap), py = sy + rr*(size+gap);
-      var isBad = k >= r.copies - r.bad;
-      if(isBad){ px += Math.round(Math.sin(t*20+k)*1.5); }
-      var bob = r.auto && !isBad ? Math.round(Math.sin(t*5 + k*0.7)) : 0;
-      cx.fillStyle = isBad ? "#c62828" : ty.color;
-      cx.fillRect(px, py+bob, size, size-2);
-      cx.fillStyle = "#f4efe2";
-      cx.fillRect(px+2, py+2+bob, 2, 2);
-      cx.fillRect(px+5, py+2+bob, 2, 2);
-      cx.fillStyle = isBad ? "#c62828" : "#26241f";
-      cx.fillRect(px+1, py+size-2+bob, 2, 2);
-      cx.fillRect(px+size-3, py+size-2+bob, 2, 2);
+    // the crew: one miniature per copy, standing around the bench
+    var show = Math.min(r.copies, 10);
+    var spin = r.auto ? t*0.6 : 0;
+    for(var i=0;i<show;i++){
+      var ang = spin + i*(Math.PI*2/Math.max(show,1)) - Math.PI/2;
+      var rad = 25 + (i%2)*5;
+      var lean = r.flash * 5;
+      var fx = p.x + Math.cos(ang)*(rad - lean);
+      var fy = p.y + Math.sin(ang)*(rad*0.72 - lean);
+      var isBad = i >= show - Math.min(r.bad, show);
+      if(isBad) fx += Math.sin(t*22+i)*1.2;
+      mini(fx, fy, ty.color, 5.5, isBad, false);
     }
     if(r.copies > show){
-      cx.fillStyle = "#26241f"; cx.font = "bold 11px Courier New, monospace";
-      cx.fillText("+"+(r.copies-show), sx, y+ROW-12);
-    }
-
-    if(r.auto && ty.out && i < made.length-1 && Math.random() < 0.08 + Math.min(0.5, r.copies*0.02)){
-      particles.push({x:W-30, y:y+ROW-10, ty:y+ROW+6, c:ty.color, life:1});
+      cx.fillStyle = "#1f5fbf"; cx.font = "bold 10px Courier New, monospace";
+      cx.fillText("+"+(r.copies-show), p.x+19, p.y-13);
     }
   });
 
-  for(var p=particles.length-1;p>=0;p--){
-    var q = particles[p];
-    q.y += 1.2; q.life -= 0.03;
-    cx.fillStyle = q.c; cx.globalAlpha = Math.max(0,q.life);
-    cx.fillRect(q.x-2, q.y, 4, 4);
-    cx.globalAlpha = 1;
-    if(q.life <= 0 || q.y > q.ty) particles.splice(p,1);
-  }
+  // the player miniature walks to whatever routine was just ordered
+  var home = {x: W/2, y: H - m - 14};
+  var goalP = hero.target ? stationXY(hero.target, W, H) : home;
+  if(hero.target){ goalP = {x: goalP.x - 22, y: goalP.y - 4}; }
+  if(hero.x < 0){ hero.x = home.x; hero.y = home.y; }
+  var dx = goalP.x - hero.x, dy = goalP.y - hero.y, d = Math.sqrt(dx*dx+dy*dy);
+  var stepLen = 2.2;
+  if(d > stepLen){ hero.x += dx/d*stepLen; hero.y += dy/d*stepLen; }
+  var hop = d > stepLen ? Math.abs(Math.sin(t*12))*2 : 0;
+  mini(hero.x, hero.y - hop, "#1f5fbf", 8, false, true);
+
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);
@@ -585,32 +681,6 @@ requestAnimationFrame(draw);
 var cmd = document.getElementById("cmd");
 document.getElementById("send").onclick = function(){ submit(cmd.value); cmd.value = ""; };
 cmd.addEventListener("keydown", function(e){ if(e.key === "Enter"){ submit(cmd.value); cmd.value = ""; } });
-
-var mic = document.getElementById("mic");
-var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-var rec = null, listening = false;
-mic.onclick = function(){
-  if(!SR){ say("this browser has no speech recognition. type instead, or open the mill in a browser that supports voice.", "warn"); return; }
-  if(listening){ try{ rec.stop(); }catch(e){} return; }
-  rec = new SR();
-  rec.lang = "en-US";
-  rec.interimResults = true;
-  rec.maxAlternatives = 1;
-  var finalText = "";
-  rec.onresult = function(e){
-    var txt = "";
-    for(var i=0;i<e.results.length;i++){ txt += e.results[i][0].transcript; if(e.results[i].isFinal) finalText = txt; }
-    cmd.value = txt;
-  };
-  rec.onerror = function(e){ say("voice error: "+e.error, "warn"); };
-  rec.onend = function(){
-    listening = false; mic.classList.remove("on");
-    var t = (finalText || cmd.value).trim();
-    if(t){ submit(t); cmd.value = ""; }
-  };
-  listening = true; mic.classList.add("on");
-  try{ rec.start(); }catch(e){ listening = false; mic.classList.remove("on"); }
-};
 
 /* ---------- drawer ---------- */
 var drawer = document.getElementById("drawer"), veil = document.getElementById("veil");
@@ -626,8 +696,8 @@ document.getElementById("resetBtn").onclick = function(){
 /* ---------- start ---------- */
 function intro(){
   say("TEXT BASED GAME v1. one routine. one cursor. a pile of scrap.", "big");
-  say("you own a single grabber. it picks up scrap when you tell it to. say or type: grab some scrap.", "sys");
-  say("tap MIC to talk. say help any time.", "sys");
+  say("you stand in an empty workshop with a single grabber. it picks up scrap when you tell it to.", "sys");
+  say("type an order in your own words, or tap one of the suggestions above the box. start with: grab some scrap.", "sys");
 }
 renderRes();
 if(saved){ say("mill restored. say scan to see where you left it.", "big"); } else intro();
